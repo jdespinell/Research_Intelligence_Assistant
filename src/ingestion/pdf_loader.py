@@ -47,13 +47,13 @@ def extract_pdf(pdf_path: Path) -> PaperDocument:
     meta = doc.metadata or {}
 
     # Try to get title from metadata; fall back to filename stem
-    title = meta.get("title", "").strip() or pdf_path.stem.replace("_", " ").replace("-", " ")
+    title = (meta.get("title", "").strip() or pdf_path.stem.replace("_", " ").replace("-", " ")).replace("\x00", "")
 
     # Authors: metadata field is a single string — split by common separators
-    authors_raw = meta.get("author", "").strip()
+    authors_raw = meta.get("author", "").strip().replace("\x00", "")
     if authors_raw:
         import re
-        authors = [a.strip() for a in re.split(r"[;,&]|\band\b", authors_raw) if a.strip()]
+        authors = [a.strip().replace("\x00", "") for a in re.split(r"[;,&]|\band\b", authors_raw) if a.strip()]
     else:
         authors = []
 
@@ -61,7 +61,7 @@ def extract_pdf(pdf_path: Path) -> PaperDocument:
     pages: list[PageContent] = []
     for page_num in range(total_pages):
         page = doc[page_num]
-        text = page.get_text("text")  # plain text extraction
+        text = page.get_text("text").replace("\x00", "")  # plain text extraction without NUL bytes
         # Skip nearly empty pages (e.g. cover images, blank pages)
         if len(text.strip()) > 50:
             pages.append(PageContent(page_number=page_num + 1, text=text.strip()))

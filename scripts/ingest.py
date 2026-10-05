@@ -29,6 +29,8 @@ settings = get_settings()
 
 def upsert_paper(conn, filename: str, title: str, authors: list[str], num_pages: int) -> int:
     """Insert or update a paper record. Returns the paper id."""
+    title_clean = (title or "").replace("\x00", "")
+    authors_clean = [(a or "").replace("\x00", "") for a in (authors or [])]
     row = conn.execute(
         """
         INSERT INTO papers (filename, title, authors, num_pages)
@@ -40,7 +42,7 @@ def upsert_paper(conn, filename: str, title: str, authors: list[str], num_pages:
                 ingested_at = now()
         RETURNING id
         """,
-        (filename, title, authors, num_pages),
+        (filename, title_clean, authors_clean, num_pages),
     ).fetchone()
     return row[0]
 
@@ -72,6 +74,7 @@ def ingest_paper(conn, doc, reset: bool = False) -> int:
 
     # Insert chunks
     for chunk, embedding in zip(chunks, embeddings):
+        content_clean = chunk.content.replace("\x00", "")
         conn.execute(
             """
             INSERT INTO chunks (paper_id, chunk_index, page_number, content, embedding)
@@ -80,7 +83,7 @@ def ingest_paper(conn, doc, reset: bool = False) -> int:
                 SET content = EXCLUDED.content,
                     embedding = EXCLUDED.embedding
             """,
-            (paper_id, chunk.chunk_index, chunk.page_number, chunk.content, embedding.tolist()),
+            (paper_id, chunk.chunk_index, chunk.page_number, content_clean, embedding.tolist()),
         )
 
     logger.success(f"  ✅ '{doc.filename}' → {len(chunks)} chunks ingested")
