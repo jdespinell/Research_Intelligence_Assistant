@@ -1,0 +1,36 @@
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Database
+psycopg[binary]>=3.2.0
+pgvector>=0.3.5
+
+# Graph database
+neo4j>=5.25.0
+
+# LLM providers
+ollama>=0.4.0
+google-genai>=1.0.0
+
+# Embeddings
+sentence-transformers>=3.3.0
+
+# PDF processing
+pymupdf>=1.25.0
+
+# Configuration
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# UI
+streamlit>=1.40.0
+
+# Utilities
+python-dotenv>=1.0.0
+httpx>=0.28.0
+tenacity>=9.0.0      # retry logic for API calls
+loguru>=0.7.0        # structured logging
+
+# Evaluation
+numpy>=2.0.0

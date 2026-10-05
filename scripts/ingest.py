@@ -1,0 +1,143 @@
+"""
+scripts/ingest.py
+
+End-to-end ingestion pipeline:
+  PDF files → text extraction → chunking → embeddings → PostgreSQL
+
+Usage:
+    python scripts/ingest.py --papers-dir data/papers/
+    python scripts/ingest.py --papers-dir data/papers/ --reset
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import numpy as np
+from loguru import logger
+
+from src.config import get_settings
+from src.db.postgres import get_connection, init_db
+from src.ingestion.chunker import chunk_document
+from src.ingestion.embedder import embed_texts
+from src.ingestion.pdf_loader import load_papers_dir
+
+settings = get_settings()
+
+
+def upsert_paper(conn, filename: str, title: str, authors: list[str], num_pages: int) -> int:
+    """Insert or update a paper record. Returns the paper id."""
+    row = conn.execute(
+        """
+        INSERT INTO papers (filename, title, authors, num_pages)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (filename) DO UPDATE
+            SET title = EXCLUDED.title,
+                authors = EXCLUDED.authors,
+                num_pages = EXCLUDED.num_pages,
+                ingested_at = now()
+        RETURNING id
+        """,
+        (filename, title, authors, num_pages),
+    ).fetchone()
+    return row[0]
+
+
+def ingest_paper(conn, doc, reset: bool = False) -> int:
+    """Ingest a single PaperDocument. Returns number of chunks inserted."""
+    paper_id = upsert_paper(conn, doc.filename, doc.title, doc.authors, doc.num_pages)
+
+    if reset:
+        conn.execute("DELETE FROM chunks WHERE paper_id = %s", (paper_id,))
+
+    # Check if already ingested (skip if chunks exist and not resetting)
+    count = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE paper_id = %s", (paper_id,)
+    ).fetchone()[0]
+    if count > 0 and not reset:
+        logger.info(f"  '{doc.filename}' already ingested ({count} chunks). Use --reset to re-ingest.")
+        return 0
+
+    # Chunk
+    chunks = chunk_document(doc)
+    if not chunks:
+        logger.warning(f"  No chunks generated for '{doc.filename}'")
+        return 0
+
+    # Embed
+    texts = [c.content for c in chunks]
+    embeddings: np.ndarray = embed_texts(texts, show_progress=len(chunks) > 50)
+
+    # Insert chunks
+    for chunk, embedding in zip(chunks, embeddings):
+        conn.execute(
+            """
+            INSERT INTO chunks (paper_id, chunk_index, page_number, content, embedding)
+            VALUES (%s, %s, %s, %s, %s::vector)
+            ON CONFLICT (paper_id, chunk_index) DO UPDATE
+                SET content = EXCLUDED.content,
+                    embedding = EXCLUDED.embedding
+            """,
+            (paper_id, chunk.chunk_index, chunk.page_number, chunk.content, embedding.tolist()),
+        )
+
+    logger.success(f"  ✅ '{doc.filename}' → {len(chunks)} chunks ingested")
+    return len(chunks)
+
+
+def run_ingestion(papers_dir: Path, reset: bool = False) -> None:
+    logger.info("=" * 55)
+    logger.info("Research Intelligence Assistant — Ingestion Pipeline")
+    logger.info("=" * 55)
+    logger.info(f"Papers directory : {papers_dir}")
+    logger.info(f"Reset mode       : {reset}")
+    logger.info(f"Chunk size       : {settings.chunk_size} words")
+    logger.info(f"Embedding model  : {settings.embedding_model}")
+    logger.info("=" * 55)
+
+    # Initialize DB schema
+    init_db()
+
+    # Load PDFs
+    docs = load_papers_dir(papers_dir)
+    if not docs:
+        logger.error(f"No PDF files found in {papers_dir}")
+        sys.exit(1)
+
+    # Ingest each document
+    total_chunks = 0
+    with get_connection() as conn:
+        for doc in docs:
+            logger.info(f"Processing: {doc.filename}")
+            total_chunks += ingest_paper(conn, doc, reset=reset)
+
+    logger.info("=" * 55)
+    logger.success(f"Ingestion complete: {len(docs)} papers, {total_chunks} new chunks")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Ingest PDFs into the Research Intelligence Assistant")
+    parser.add_argument(
+        "--papers-dir",
+        type=Path,
+        default=Path("data/papers"),
+        help="Directory containing PDF files (default: data/papers/)",
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Delete existing chunks and re-ingest all papers",
+    )
+    args = parser.parse_args()
+
+    if not args.papers_dir.exists():
+        logger.error(f"Directory not found: {args.papers_dir}")
+        sys.exit(1)
+
+    run_ingestion(args.papers_dir, reset=args.reset)
+
+
+if __name__ == "__main__":
+    main()
