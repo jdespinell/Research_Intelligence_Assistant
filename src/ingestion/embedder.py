@@ -18,7 +18,8 @@ settings = get_settings()
 def _get_model() -> SentenceTransformer:
     logger.info(f"Loading embedding model: {settings.embedding_model}")
     model = SentenceTransformer(settings.embedding_model)
-    logger.success(f"Embedding model loaded ✅ (dim={model.get_sentence_embedding_dimension()})")
+    dim = model.get_embedding_dimension() if hasattr(model, "get_embedding_dimension") else model.get_sentence_embedding_dimension()
+    logger.success(f"Embedding model loaded ✅ (dim={dim})")
     return model
 
 

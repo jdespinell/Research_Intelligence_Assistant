@@ -21,8 +21,13 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(router, prefix="/api/v1")
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.1.0"}
+    return {
+        "status": "ok",
+        "version": "0.1.0",
+        "service": "Research Intelligence Assistant",
+    }

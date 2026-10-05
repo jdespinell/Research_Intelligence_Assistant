@@ -32,5 +32,6 @@ httpx>=0.28.0
 tenacity>=9.0.0      # retry logic for API calls
 loguru>=0.7.0        # structured logging
 
-# Evaluation
+# Evaluation / Testing
 numpy>=2.0.0
+pytest>=8.0.0
