@@ -54,6 +54,10 @@ class Neo4jClient:
             self.run(cql)
         logger.success("Neo4j constraints initialized ✅")
 
+    def init_schema(self) -> None:
+        """Alias for init_constraints."""
+        self.init_constraints()
+
     def close(self) -> None:
         self._driver.close()
 

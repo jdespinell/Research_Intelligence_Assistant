@@ -61,10 +61,15 @@ def _conn_str() -> str:
 
 
 @contextmanager
-def get_connection() -> Generator[psycopg.Connection, None, None]:
-    """Yield a raw psycopg connection with pgvector registered."""
+def get_connection(register_pgvector: bool = True) -> Generator[psycopg.Connection, None, None]:
+    """Yield a raw psycopg connection, optionally with pgvector registered."""
     conn = psycopg.connect(_conn_str())
-    register_vector(conn)
+    if register_pgvector:
+        try:
+            register_vector(conn)
+        except Exception:
+            # Extension not yet created (first run before init_db). Skip registration.
+            pass
     try:
         yield conn
         conn.commit()
@@ -76,8 +81,9 @@ def get_connection() -> Generator[psycopg.Connection, None, None]:
 
 
 def init_db() -> None:
-    """Create tables and indexes if they don't exist yet."""
-    ddl = DDL.format(dim=settings.embedding_dimension)
-    with get_connection() as conn:
+    """Create the pgvector extension, tables, and indexes if they don't exist yet."""
+    ddl = DDL.format(dim=get_settings().embedding_dimension)
+    # Step 1: Run DDL with a plain connection (pgvector not registered yet)
+    with get_connection(register_pgvector=False) as conn:
         conn.execute(ddl)
     logger.success("PostgreSQL schema initialized ✅")

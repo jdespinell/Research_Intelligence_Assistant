@@ -48,6 +48,7 @@ class GeminiClient(LLMClient):
             system_instruction=system_instruction,
             temperature=kwargs.get("temperature", 0.2),
             max_output_tokens=kwargs.get("max_tokens", 4096),
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
         response = self.client.models.generate_content(
