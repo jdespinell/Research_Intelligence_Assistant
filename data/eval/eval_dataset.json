@@ -1,0 +1,37 @@
+[
+  {
+    "id": "q1",
+    "question": "What is the definition of Khovanskii non-degeneracy for polynomial maps?",
+    "expected_answer": "Khovanskii non-degeneracy is a geometric condition on a polynomial map or system where for each compact face of the Minkowski sum of Newton polyhedra, the corresponding face systems define a non-singular complete intersection on the algebraic torus.",
+    "relevant_keywords": ["Khovanskii non-degeneracy", "Newton polyhedra", "Minkowski sum", "torus", "face system"],
+    "category": "factual"
+  },
+  {
+    "id": "q2",
+    "question": "How does Khovanskii non-degeneracy relate to the Milnor fibration and the Milnor number?",
+    "expected_answer": "Under Khovanskii non-degeneracy (or Kushnirenko / Kouchnirenko non-degeneracy), topological invariants such as the Milnor number can be computed purely combinatorially from the Newton polyhedron or Newton boundary (e.g. Kouchnirenko's formula).",
+    "relevant_keywords": ["Milnor number", "Milnor fibration", "combinatorial formula", "Newton boundary", "Kouchnirenko"],
+    "category": "factual"
+  },
+  {
+    "id": "q3",
+    "question": "What is the concept of topological triviality for families of isolated hypersurface singularities?",
+    "expected_answer": "A family of isolated hypersurface singularities f_t is topologically trivial if there exists a family of homeomorphisms of the ambient space preserving the fibers and identifying the singularity at t=0 with t>0.",
+    "relevant_keywords": ["topological triviality", "homeomorphism", "family of singularities", "fiber", "Milnor number constant"],
+    "category": "factual"
+  },
+  {
+    "id": "q4",
+    "question": "Which mathematicians are closely associated with Newton non-degeneracy and singularity invariants?",
+    "expected_answer": "Key mathematicians include A. G. Kouchnirenko, A. G. Khovanskii, V. I. Arnold, Mutsuo Oka, and John Milnor.",
+    "relevant_keywords": ["Khovanskii", "Kouchnirenko", "Arnold", "Oka", "Milnor"],
+    "category": "relational"
+  },
+  {
+    "id": "q5",
+    "question": "What condition guarantees constancy of the Milnor number in non-degenerate families?",
+    "expected_answer": "Newton non-degeneracy combined with non-degeneracy on the boundary or conditions on the Newton diagram (such as maintaining the Newton polyhedron) often guarantees mu-constancy.",
+    "relevant_keywords": ["mu-constant", "Milnor number", "Newton diagram", "Newton polyhedron", "non-degenerate"],
+    "category": "factual"
+  }
+]

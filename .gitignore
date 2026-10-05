@@ -29,9 +29,11 @@ ENV/
 # Environment variables (secrets)
 .env
 
-# Data directory (PDFs can be large — track only structure)
-data/papers/
-data/eval/
+# Data directory (PDFs and generated outputs ignored)
+data/papers/*
+!data/papers/.gitkeep
+data/eval/*
+!data/eval/eval_dataset.json
 
 # IDE
 .idea/
