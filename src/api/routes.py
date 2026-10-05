@@ -144,3 +144,46 @@ def list_papers():
         ]
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Database error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Graph Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/graph/stats")
+def graph_stats():
+    """Return Knowledge Graph statistics from Neo4j."""
+    from src.retrieval.graph_search import get_graph_search
+    try:
+        gs = get_graph_search()
+        return gs.get_graph_stats()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Neo4j error: {e}")
+
+
+@router.get("/graph/explore")
+def graph_explore(entity: str = Query(..., description="Entity name to explore"), limit: int = 20):
+    """Find immediate neighbors and relationships of an entity in the graph."""
+    from src.retrieval.graph_search import get_graph_search
+    try:
+        gs = get_graph_search()
+        results = gs.find_related_entities(entity_name=entity, limit=limit)
+        return {"entity": entity, "relations": results}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Neo4j error: {e}")
+
+
+@router.get("/graph/path")
+def graph_path(
+    source: str = Query(..., description="Source entity name"),
+    target: str = Query(..., description="Target entity name"),
+    max_depth: int = 3,
+):
+    """Find multi-hop paths between two entities in the knowledge graph."""
+    from src.retrieval.graph_search import get_graph_search
+    try:
+        gs = get_graph_search()
+        paths = gs.find_path_between_entities(source_name=source, target_name=target, max_depth=max_depth)
+        return {"source": source, "target": target, "paths": paths}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Neo4j error: {e}")
