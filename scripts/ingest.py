@@ -22,7 +22,7 @@ from src.config import get_settings
 from src.db.postgres import get_connection, init_db
 from src.ingestion.chunker import chunk_document
 from src.ingestion.embedder import embed_texts
-from src.ingestion.pdf_loader import load_papers_dir
+from src.ingestion.pdf_loader import iter_papers_dir
 
 settings = get_settings()
 
@@ -100,21 +100,26 @@ def run_ingestion(papers_dir: Path, reset: bool = False) -> None:
     # Initialize DB schema
     init_db()
 
-    # Load PDFs
-    docs = load_papers_dir(papers_dir)
-    if not docs:
+    pdf_files = list(papers_dir.glob("*.pdf"))
+    if not pdf_files:
         logger.error(f"No PDF files found in {papers_dir}")
         sys.exit(1)
 
-    # Ingest each document
+    # Ingest document by document (streamed, individual commit per paper)
+    total_papers = 0
     total_chunks = 0
-    with get_connection() as conn:
-        for doc in docs:
-            logger.info(f"Processing: {doc.filename}")
-            total_chunks += ingest_paper(conn, doc, reset=reset)
+    for idx, doc in enumerate(iter_papers_dir(papers_dir), 1):
+        logger.info(f"[{idx}/{len(pdf_files)}] Processing: '{doc.filename}' ({doc.num_pages} pages)")
+        try:
+            with get_connection() as conn:
+                chunks_inserted = ingest_paper(conn, doc, reset=reset)
+                total_chunks += chunks_inserted
+                total_papers += 1
+        except Exception as e:
+            logger.error(f"Failed to ingest '{doc.filename}': {e}")
 
     logger.info("=" * 55)
-    logger.success(f"Ingestion complete: {len(docs)} papers, {total_chunks} new chunks")
+    logger.success(f"Ingestion complete: {total_papers} papers processed, {total_chunks} chunks ingested")
 
 
 def main():

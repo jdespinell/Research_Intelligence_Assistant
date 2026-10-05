@@ -57,8 +57,9 @@ def extract_pdf(pdf_path: Path) -> PaperDocument:
     else:
         authors = []
 
+    total_pages = len(doc)
     pages: list[PageContent] = []
-    for page_num in range(len(doc)):
+    for page_num in range(total_pages):
         page = doc[page_num]
         text = page.get_text("text")  # plain text extraction
         # Skip nearly empty pages (e.g. cover images, blank pages)
@@ -77,24 +78,26 @@ def extract_pdf(pdf_path: Path) -> PaperDocument:
         filepath=str(pdf_path.resolve()),
         title=title,
         authors=authors,
-        num_pages=len(doc),
+        num_pages=total_pages,
         pages=pages,
     )
 
 
-def load_papers_dir(papers_dir: Path) -> list[PaperDocument]:
-    """Load all PDFs from a directory. Skips files that fail to parse."""
+def iter_papers_dir(papers_dir: Path):
+    """Yield PaperDocument one by one from a directory. Skips files that fail to parse."""
     papers_dir = Path(papers_dir)
     pdf_files = sorted(papers_dir.glob("*.pdf"))
     logger.info(f"Found {len(pdf_files)} PDF(s) in {papers_dir}")
 
-    documents = []
-    for pdf_path in pdf_files:
+    for idx, pdf_path in enumerate(pdf_files, 1):
         try:
-            doc = extract_pdf(pdf_path)
-            documents.append(doc)
+            yield extract_pdf(pdf_path)
         except Exception as e:
             logger.warning(f"Skipping '{pdf_path.name}': {e}")
 
-    logger.success(f"Loaded {len(documents)}/{len(pdf_files)} PDFs successfully")
-    return documents
+
+def load_papers_dir(papers_dir: Path) -> list[PaperDocument]:
+    """Load all PDFs from a directory into a list."""
+    docs = list(iter_papers_dir(papers_dir))
+    logger.success(f"Loaded {len(docs)} PDFs successfully")
+    return docs
