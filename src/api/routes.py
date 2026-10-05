@@ -21,9 +21,14 @@ router = APIRouter()
 # Request / Response models
 # ---------------------------------------------------------------------------
 
+from typing import Literal
+from src.retrieval.hybrid import get_hybrid_retriever
+
+
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 5
+    mode: Literal["auto", "vector", "graph", "hybrid"] = "auto"
     paper_filter: list[str] | None = None
 
 
@@ -36,9 +41,20 @@ class ChunkSource(BaseModel):
     content: str
 
 
+class GraphRelationItem(BaseModel):
+    source: str
+    source_type: str = "Entity"
+    relation: str
+    target: str
+    target_type: str = "Entity"
+
+
 class QueryResponse(BaseModel):
     answer: str
     sources: list[ChunkSource]
+    graph_relations: list[GraphRelationItem] = []
+    mode_used: str
+    query_type: str
     model: str
 
 
@@ -54,39 +70,37 @@ class CorpusStats(BaseModel):
 @router.post("/query", response_model=QueryResponse)
 def query(request: QueryRequest):
     """
-    Answer a question about the ingested papers using RAG.
-    Returns the answer and the source chunks used to generate it.
+    Answer a question about the scientific literature using Hybrid GraphRAG.
+    Combines dense vector retrieval with knowledge graph relationships.
     """
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    logger.info(f"Query: '{request.question[:80]}'")
+    logger.info(f"Query: '{request.question[:80]}' | mode={request.mode}")
 
-    # 1. Retrieve relevant chunks
-    results: list[SearchResult] = vector_search(
+    # 1. Hybrid retrieval (vector + graph)
+    retriever = get_hybrid_retriever()
+    hybrid_res = retriever.retrieve(
         query=request.question,
         top_k=request.top_k,
+        mode=request.mode,
         paper_filter=request.paper_filter,
     )
 
-    if not results:
+    if not hybrid_res.chunks and not hybrid_res.graph_relations:
         raise HTTPException(
             status_code=404,
-            detail="No relevant chunks found. Make sure papers have been ingested.",
+            detail="No relevant chunks or graph relationships found. Make sure papers have been ingested.",
         )
 
-    # 2. Build prompt context
-    chunks_text = format_chunks_for_prompt(results)
-    user_prompt = RAG_USER.format(chunks=chunks_text, query=request.question)
-
-    # 3. Call LLM
+    # 2. Call LLM
     llm = get_llm_client()
     answer = llm.chat([
-        Message(role="system", content=RAG_SYSTEM),
-        Message(role="user", content=user_prompt),
+        Message(role="system", content=hybrid_res.system_prompt),
+        Message(role="user", content=hybrid_res.user_prompt),
     ])
 
-    # 4. Build response
+    # 3. Format sources
     sources = [
         ChunkSource(
             chunk_id=r.chunk_id,
@@ -96,7 +110,18 @@ def query(request: QueryRequest):
             score=round(r.score, 4),
             content=r.content[:300] + "..." if len(r.content) > 300 else r.content,
         )
-        for r in results
+        for r in hybrid_res.chunks
+    ]
+
+    graph_sources = [
+        GraphRelationItem(
+            source=g.get("source", ""),
+            source_type=g.get("source_type", "Entity"),
+            relation=g.get("relation", ""),
+            target=g.get("target", ""),
+            target_type=g.get("target_type", "Entity"),
+        )
+        for g in hybrid_res.graph_relations
     ]
 
     from src.config import get_settings
@@ -107,7 +132,14 @@ def query(request: QueryRequest):
         else settings.gemini_model
     )
 
-    return QueryResponse(answer=answer, sources=sources, model=model_name)
+    return QueryResponse(
+        answer=answer,
+        sources=sources,
+        graph_relations=graph_sources,
+        mode_used=hybrid_res.mode_used,
+        query_type=hybrid_res.query_type,
+        model=model_name,
+    )
 
 
 @router.get("/stats", response_model=CorpusStats)

@@ -74,3 +74,31 @@ Return:
   "unsupported_claims": ["claim 1", "claim 2", ...]
 }}
 """
+
+# ---------------------------------------------------------------------------
+# Hybrid GraphRAG — Textual evidence + Knowledge Graph relations (Fase 4)
+# ---------------------------------------------------------------------------
+
+HYBRID_RAG_SYSTEM = """\
+You are an expert scientific research intelligence assistant in mathematics.
+Your task is to synthesize an answer to the question using BOTH:
+1. Textual evidence (exact passages from scientific papers with page numbers)
+2. Ontological evidence from the Knowledge Graph (relationships between concepts, theorems, authors, and papers).
+
+Rules:
+- Synthesize relationships clearly (e.g. "Paper X proves Theorem Y, which generalizes Result Z").
+- Cite exact paper sources and pages for textual claims.
+- Explicitly reference relations from the Knowledge Graph when explaining connections between authors or concepts.
+- If information is insufficient to answer completely, acknowledge the limitations.
+- Respond in the same language as the question.
+"""
+
+HYBRID_RAG_USER = """\
+Textual Evidence (Retrieved Chunks):
+{chunks}
+
+Knowledge Graph Relations:
+{graph_context}
+
+Question: {query}
+"""
