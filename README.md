@@ -104,13 +104,39 @@ scripts/
 
 ## Development Roadmap
 
-See [PLAN.md](PLAN.md) for the full development plan.
+- [x] **Phase 0** — Setup & infrastructure (Docker, PG 16 + pgvector, Neo4j, Ollama & Gemini)
+- [x] **Phase 1** — Base RAG pipeline (PyMuPDF, word chunking, bge embeddings, pgvector, FastAPI)
+- [x] **Phase 2** — Evaluation framework (Precision@k, Recall@k, MRR, Faithfulness, Relevance CLI)
+- [x] **Phase 3** — Knowledge Graph (LLM extraction of Concepts/Theorems/Methods/Authors, Neo4j builder)
+- [x] **Phase 4** — Hybrid GraphRAG (Intelligent query router, dual-context synthesis, Streamlit Explorer)
 
-- [x] **Phase 0** — Setup & infrastructure
-- [ ] **Phase 1** — Basic RAG pipeline
-- [ ] **Phase 2** — Evaluation framework
-- [ ] **Phase 3** — Knowledge graph
-- [ ] **Phase 4** — Hybrid GraphRAG
+### Running Tests
+
+```bash
+pytest -v
+```
+
+### Running the End-to-End Workflow
+
+```bash
+# 1. Download sample arXiv papers (or copy your PDFs to data/papers/)
+python scripts/download_sample_papers.py
+
+# 2. Ingest papers into PostgreSQL + pgvector
+python scripts/ingest.py --papers-dir data/papers/
+
+# 3. Build the Neo4j Knowledge Graph with LLM extraction
+python scripts/build_graph.py
+
+# 4. Run automated evaluation & generate report
+python scripts/evaluate.py
+
+# 5. Start the FastAPI backend
+uvicorn src.api.main:app --reload
+
+# 6. Launch the Streamlit Research Assistant UI
+streamlit run ui/app.py
+```
 
 ## Tech Stack
 
