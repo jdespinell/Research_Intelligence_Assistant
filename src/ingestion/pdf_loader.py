@@ -10,7 +10,7 @@ For each PDF, returns a list of Page objects with:
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF (avoid deprecated `fitz` alias)
 from loguru import logger
 
 
