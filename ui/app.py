@@ -261,39 +261,54 @@ with st.sidebar:
     top_k = st.slider("Passages top-k", min_value=1, max_value=15, value=5)
 
     st.markdown("---")
-    st.markdown("### 📊 Knowledge Corpus")
     stats = get_stats()
     g_stats = get_graph_stats()
+    api_online = stats is not None and g_stats is not None
+
+    if api_online:
+        st.markdown(
+            '<div style="background:#064e3b;color:#6ee7b7;padding:6px 12px;border-radius:6px;font-size:0.85rem;font-weight:600;margin-bottom:12px;">'
+            '● API Backend Online (:8000)</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div style="background:#7f1d1d;color:#fca5a5;padding:8px 12px;border-radius:6px;font-size:0.82rem;font-weight:600;margin-bottom:12px;">'
+            '▲ API Backend Offline<br><span style="font-size:0.75rem;font-weight:400;color:#fecaca;">Ejecuta en terminal:<br><code>.venv/bin/uvicorn src.api.main:app --reload</code></span></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### 📊 Knowledge Corpus")
 
     col1, col2 = st.columns(2)
     with col1:
-        papers_count = stats["num_papers"] if stats else 0
+        papers_display = stats["num_papers"] if (stats and "num_papers" in stats) else "—"
         st.markdown(f"""
         <div class="stat-card">
-            <div class="stat-value">{papers_count}</div>
+            <div class="stat-value">{papers_display}</div>
             <div class="stat-label">Papers (PG)</div>
         </div>""", unsafe_allow_html=True)
     with col2:
-        chunks_count = stats["num_chunks"] if stats else 0
+        chunks_display = stats["num_chunks"] if (stats and "num_chunks" in stats) else "—"
         st.markdown(f"""
         <div class="stat-card">
-            <div class="stat-value">{chunks_count}</div>
+            <div class="stat-value">{chunks_display}</div>
             <div class="stat-label">Chunks</div>
         </div>""", unsafe_allow_html=True)
 
     col3, col4 = st.columns(2)
     with col3:
-        nodes_count = g_stats.get("total_nodes", 0) if g_stats else 0
+        nodes_display = g_stats.get("total_nodes", "—") if g_stats else "—"
         st.markdown(f"""
         <div class="stat-card">
-            <div class="stat-value">{nodes_count}</div>
+            <div class="stat-value">{nodes_display}</div>
             <div class="stat-label">Nodes (Neo4j)</div>
         </div>""", unsafe_allow_html=True)
     with col4:
-        rels_count = g_stats.get("total_relationships", 0) if g_stats else 0
+        rels_display = g_stats.get("total_relationships", "—") if g_stats else "—"
         st.markdown(f"""
         <div class="stat-card">
-            <div class="stat-value">{rels_count}</div>
+            <div class="stat-value">{rels_display}</div>
             <div class="stat-label">Relations</div>
         </div>""", unsafe_allow_html=True)
 
@@ -307,6 +322,8 @@ with st.sidebar:
                 if p['authors']:
                     st.caption(f"**Authors:** {', '.join(p['authors'][:3])}")
                 st.caption(f"**Pages:** {p['num_pages']}")
+    elif not api_online:
+        st.warning("⚠️ No se puede conectar a la API (puerto 8000). Inicia el backend para listar los artículos.")
     else:
         st.info("No papers in database.\nRun: `python scripts/ingest.py`")
 
@@ -344,12 +361,18 @@ with tab_qa:
             if st.button(ex, key=f"ex_{i}", use_container_width=True):
                 example_clicked = ex
 
+    if "current_question" not in st.session_state:
+        st.session_state.current_question = ""
+
+    if example_clicked:
+        st.session_state.current_question = example_clicked
+
     if "query_history" not in st.session_state:
         st.session_state.query_history = []
 
     question = st.text_area(
         "Question",
-        value=example_clicked or "",
+        value=st.session_state.current_question,
         placeholder="Ask questions about theorems, authors, concepts, proofs...",
         height=90,
         label_visibility="collapsed",
@@ -361,15 +384,22 @@ with tab_qa:
     with clear_col:
         if st.button("Clear", use_container_width=True):
             st.session_state.query_history = []
+            st.session_state.current_question = ""
             st.rerun()
 
-    if ask_btn and question.strip():
+    query_to_execute = None
+    if example_clicked:
+        query_to_execute = example_clicked
+    elif ask_btn and question.strip():
+        query_to_execute = question.strip()
+
+    if query_to_execute:
         with st.spinner("Traversing knowledge graph, searching vectors, and generating synthesis..."):
-            result = ask_question(question.strip(), top_k=top_k, mode=selected_mode)
+            result = ask_question(query_to_execute, top_k=top_k, mode=selected_mode)
 
         if result:
             st.session_state.query_history.insert(0, {
-                "question": question.strip(),
+                "question": query_to_execute,
                 "result": result,
             })
 
