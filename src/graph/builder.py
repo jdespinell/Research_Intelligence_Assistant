@@ -96,6 +96,13 @@ class GraphBuilder:
         Build or update the graph for a single paper extraction result.
         Returns counts of nodes and relations inserted.
         """
+        if not extraction.entities and not extraction.relations:
+            logger.warning(
+                f"No entities or relations extracted for '{extraction.paper_filename}'. "
+                "Skipping graph node creation to allow retrying later."
+            )
+            return {"entities": 0, "relations": 0}
+
         logger.info(f"Building graph for '{extraction.paper_filename}'...")
 
         # 1. Insert Paper & Authors

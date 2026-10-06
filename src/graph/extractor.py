@@ -71,7 +71,9 @@ Rules:
 1. Normalize names (e.g. use standard capitalization, avoid abbreviations like 'Thm.' -> 'Theorem').
 2. Keep entity names concise (2-5 words).
 3. Do NOT invent information not present in the text.
-4. Output strictly valid JSON matching the specified schema.
+4. Extract only the TOP 8-15 most prominent entities and their key relations (avoids token limit cutoff).
+5. Do NOT include raw LaTeX formulas, backslashes, or unescaped quotes inside string values. Write mathematical concepts in plain text (e.g. 'Milnor number', not '\\mu-constant').
+6. Output strictly valid JSON matching the specified schema.
 """
 
 EXTRACTION_USER_TEMPLATE = """Paper Title: {title}
@@ -82,7 +84,7 @@ Text to analyze:
 {text}
 \"\"\"
 
-Extract the knowledge graph entities and relationships. Return ONLY a valid JSON object matching this schema:
+Extract the knowledge graph entities and relationships (top 8-15 key concepts/theorems/methods). Return ONLY a valid JSON object matching this schema:
 {{
   "entities": [
     {{"name": "...", "type": "Concept|Theorem|Method|Author", "description": "..."}}
@@ -107,11 +109,15 @@ def extract_graph_elements(
     paper_title: str,
     paper_filename: str,
     text: str,
-    max_text_chars: int = 6000,
+    max_text_chars: int = 5000,
+    max_retries: int = 2,
 ) -> GraphExtractionResult:
     """
     Extract entities and relationships from paper text using LLM.
+    Includes retry logic on transient API errors (e.g. 500 INTERNAL).
     """
+    import time
+
     # Sample beginning and representative content if text is too long
     sampled_text = text[:max_text_chars] if len(text) > max_text_chars else text
 
@@ -121,65 +127,75 @@ def extract_graph_elements(
         text=sampled_text,
     )
 
-    try:
-        response_text = llm.chat([
-            Message(role="system", content=EXTRACTION_SYSTEM_PROMPT),
-            Message(role="user", content=user_prompt),
-        ])
-        raw_json = _extract_json(response_text)
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            response_text = llm.chat([
+                Message(role="system", content=EXTRACTION_SYSTEM_PROMPT),
+                Message(role="user", content=user_prompt),
+            ])
+            raw_json = _extract_json(response_text)
 
-        entities: list[ExtractedEntity] = []
-        for e in raw_json.get("entities", []):
-            name = normalize_entity_name(e.get("name", ""))
-            etype = e.get("type", "Concept")
-            if name and etype in ["Author", "Concept", "Theorem", "Method"]:
-                entities.append(
-                    ExtractedEntity(
-                        name=name,
-                        type=etype,
-                        description=e.get("description"),
+            entities: list[ExtractedEntity] = []
+            for e in raw_json.get("entities", []):
+                name = normalize_entity_name(e.get("name", ""))
+                etype = e.get("type", "Concept")
+                if name and etype in ["Author", "Concept", "Theorem", "Method"]:
+                    entities.append(
+                        ExtractedEntity(
+                            name=name,
+                            type=etype,
+                            description=e.get("description"),
+                        )
                     )
-                )
 
-        relations: list[ExtractedRelation] = []
-        for r in raw_json.get("relations", []):
-            src = normalize_entity_name(r.get("source", ""))
-            tgt = normalize_entity_name(r.get("target", ""))
-            rel = r.get("relation", "")
-            if src and tgt and rel in [
-                "WROTE",
-                "DISCUSSES",
-                "PROVES",
-                "USES_METHOD",
-                "RELATED_TO",
-                "GENERALIZES",
-                "CITES",
-            ]:
-                relations.append(
-                    ExtractedRelation(
-                        source=src,
-                        source_type=r.get("source_type", "Concept"),
-                        relation=rel,
-                        target=tgt,
-                        target_type=r.get("target_type", "Concept"),
+            relations: list[ExtractedRelation] = []
+            for r in raw_json.get("relations", []):
+                src = normalize_entity_name(r.get("source", ""))
+                tgt = normalize_entity_name(r.get("target", ""))
+                rel = r.get("relation", "")
+                if src and tgt and rel in [
+                    "WROTE",
+                    "DISCUSSES",
+                    "PROVES",
+                    "USES_METHOD",
+                    "RELATED_TO",
+                    "GENERALIZES",
+                    "CITES",
+                ]:
+                    relations.append(
+                        ExtractedRelation(
+                            source=src,
+                            source_type=r.get("source_type", "Concept"),
+                            relation=rel,
+                            target=tgt,
+                            target_type=r.get("target_type", "Concept"),
+                        )
                     )
+
+            logger.info(
+                f"Extracted {len(entities)} entities, {len(relations)} relations from '{paper_filename}'"
+            )
+            return GraphExtractionResult(
+                paper_title=paper_title,
+                paper_filename=paper_filename,
+                entities=entities,
+                relations=relations,
+            )
+
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                logger.warning(
+                    f"Attempt {attempt + 1} failed for '{paper_filename}': {e}. Retrying in 4s..."
                 )
+                time.sleep(4)
+            else:
+                logger.error(f"Failed to extract graph from '{paper_filename}' after {max_retries} attempts: {e}")
 
-        logger.info(
-            f"Extracted {len(entities)} entities, {len(relations)} relations from '{paper_filename}'"
-        )
-        return GraphExtractionResult(
-            paper_title=paper_title,
-            paper_filename=paper_filename,
-            entities=entities,
-            relations=relations,
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to extract graph from '{paper_filename}': {e}")
-        return GraphExtractionResult(
-            paper_title=paper_title,
-            paper_filename=paper_filename,
-            entities=[],
-            relations=[],
-        )
+    return GraphExtractionResult(
+        paper_title=paper_title,
+        paper_filename=paper_filename,
+        entities=[],
+        relations=[],
+    )

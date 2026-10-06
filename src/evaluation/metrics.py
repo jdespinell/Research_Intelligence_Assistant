@@ -121,17 +121,39 @@ Return ONLY a valid JSON object in this exact format:
 
 
 def _extract_json(text: str) -> dict[str, Any]:
-    """Helper to extract JSON from LLM response text."""
-    # Match markdown json block if present
+    """Helper to extract JSON from LLM response text with robust repair."""
+    import json_repair
+
+    # 1. Match markdown json block if present
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
-    # Otherwise try direct bracket search
+    candidate = match.group(1) if match else text
+
+    # Direct standard parse
+    try:
+        return json.loads(candidate)
+    except Exception:
+        pass
+
+    # 2. Try json_repair (fixes unescaped quotes, LaTeX backslashes, unclosed brackets)
+    try:
+        parsed = json_repair.loads(candidate)
+        if isinstance(parsed, dict) and parsed:
+            return parsed
+    except Exception:
+        pass
+
+    # 3. Search for outermost braces and repair substring
     start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1:
-        return json.loads(text[start : end + 1])
-    raise ValueError(f"Could not parse JSON from text: {text}")
+    if start != -1:
+        snippet = text[start:]
+        try:
+            parsed = json_repair.loads(snippet)
+            if isinstance(parsed, dict) and parsed:
+                return parsed
+        except Exception:
+            pass
+
+    raise ValueError(f"Could not parse JSON from text: {text[:200]}...")
 
 
 def compute_faithfulness(

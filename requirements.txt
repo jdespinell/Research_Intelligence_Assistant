@@ -31,6 +31,7 @@ python-dotenv>=1.0.0
 httpx>=0.28.0
 tenacity>=9.0.0      # retry logic for API calls
 loguru>=0.7.0        # structured logging
+json-repair>=0.30.0  # robust JSON parser for LLM outputs
 
 # Evaluation / Testing
 numpy>=2.0.0

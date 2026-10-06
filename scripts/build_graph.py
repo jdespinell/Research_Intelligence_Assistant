@@ -36,8 +36,8 @@ def clear_graph() -> None:
 
 
 def is_paper_in_graph(client, filename: str) -> bool:
-    """Check if paper is already processed in Neo4j."""
-    res = client.run("MATCH (p:Paper {filename: $filename}) RETURN count(p) AS c", filename=filename)
+    """Check if paper is already processed with relationships in Neo4j."""
+    res = client.run("MATCH (p:Paper {filename: $filename})-[r]->() RETURN count(r) AS c", filename=filename)
     return bool(res and res[0]["c"] > 0)
 
 
